@@ -1,0 +1,37 @@
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+
+# Archivos temporales de compilación y de IDEs
+.vs/
+.gradle/
+ExportedObj/
+.consulo/
+.node_status
+.directory
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Metadatos generados por crash de Unity
+sysinfo.txt
+
+# OS generated
+.DS_Store
+Thumbs.db

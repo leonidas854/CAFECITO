@@ -1,0 +1,25 @@
+# Forzar a Git a usar saltos de línea LF (estilo Linux) al guardar en el repositorio
+# Esto evita que Windows cambie los archivos a CRLF y rompa los merges de Unity
+
+# Archivos de código y configuración de Unity
+*.cs     text eol=lf
+*.json   text eol=lf
+*.xml    text eol=lf
+*.yaml   text eol=lf
+*.txt    text eol=lf
+
+# Archivos serializados por Unity (YAML bajo cuerda)
+*.unity  text merge=unityyamlmerge eol=lf
+*.prefab text merge=unityyamlmerge eol=lf
+*.asset  text merge=unityyamlmerge eol=lf
+*.meta   text merge=unityyamlmerge eol=lf
+*.mat    text merge=unityyamlmerge eol=lf
+
+# Tratamiento de binarios nativos (no modificables por Git)
+*.png  binary
+*.jpg  binary
+*.wav  binary
+*.mp3  binary
+*.ogg  binary
+*.fbx  binary
+*.dll  binary
