@@ -13,8 +13,25 @@ namespace CafeSim.Core
         /// <summary>True si el cliente realizó un pedido web (bypassa la caja).</summary>
         public bool IsWebOrder { get; }
 
+        /// <summary>Producto que pidió el cliente (afecta el tiempo del barista).</summary>
+        public ProductType Product { get; set; }
+
         /// <summary>Estado actual dentro del flujo de atención.</summary>
         public CustomerState State { get; set; }
+
+        // ─── Ocupación de mesa (asignada por TableManager) ─────────────────────
+
+        /// <summary>Id de la mesa asignada; -1 si todavía no tiene mesa o consume de pie.</summary>
+        public int TableId { get; set; } = -1;
+
+        /// <summary>Índice de la silla en la mesa asignada; -1 si no aplica.</summary>
+        public int SeatIndex { get; set; } = -1;
+
+        /// <summary>True si el cliente terminó consumiendo de pie (no había mesa).</summary>
+        public bool ConsumedStanding { get; set; }
+
+        /// <summary>True si el cliente fue rechazado al llegar por límites de capacidad.</summary>
+        public bool WasRejected { get; set; }
 
         // ─── Timestamps en segundos de simulación ──────────────────────────────
 
@@ -89,8 +106,9 @@ namespace CafeSim.Core
             }
         }
 
-        /// <summary>True si el cliente completó el flujo (fue atendido o abandonó).</summary>
+        /// <summary>True si el cliente completó el flujo (atendido, abandonó o fue rechazado).</summary>
         public bool IsFinished => State == CustomerState.Leaving
-                                  || State == CustomerState.Abandoned;
+                                  || State == CustomerState.Abandoned
+                                  || State == CustomerState.Rejected;
     }
 }

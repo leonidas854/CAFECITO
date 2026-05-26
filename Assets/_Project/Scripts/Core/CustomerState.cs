@@ -24,10 +24,17 @@ namespace CafeSim.Core
         /// <summary>Sentado consumiendo en una mesa.</summary>
         Consuming,
 
+        /// <summary>Consumiendo de pie porque no había mesa libre.</summary>
+        ConsumingStanding,
+
         /// <summary>Saliendo del local (atendido satisfactoriamente).</summary>
         Leaving,
 
         /// <summary>Abandonó la cola por exceder su paciencia.</summary>
-        Abandoned
+        Abandoned,
+
+        /// <summary>Rechazado al llegar: la cola correspondiente estaba llena
+        /// o se alcanzó el máximo de clientes simultáneos.</summary>
+        Rejected
     }
 }

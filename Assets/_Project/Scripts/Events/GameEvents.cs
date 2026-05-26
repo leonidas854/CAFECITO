@@ -29,6 +29,18 @@ namespace CafeSim.Events
         public static event Action<CustomerData> OnCustomerAbandoned;
 
         /// <summary>
+        /// Se dispara cuando un cliente es rechazado al llegar porque la cola
+        /// está llena o se alcanzó el máximo de clientes simultáneos.
+        /// </summary>
+        public static event Action<CustomerData> OnCustomerRejected;
+
+        /// <summary>Se dispara cuando un cliente toma asiento en una mesa.</summary>
+        public static event Action<CustomerData> OnCustomerSeated;
+
+        /// <summary>Se dispara cuando un cliente libera la mesa que ocupaba.</summary>
+        public static event Action<CustomerData> OnCustomerLeftTable;
+
+        /// <summary>
         /// Se dispara cuando un cliente desaparece del sistema, sea por haber
         /// sido atendido o por abandono. Útil para que la capa visual remueva
         /// el GameObject con una sola suscripción.
@@ -61,6 +73,18 @@ namespace CafeSim.Events
             OnCustomerLeft?.Invoke(customer);
         }
 
+        public static void RaiseCustomerRejected(CustomerData customer)
+        {
+            OnCustomerRejected?.Invoke(customer);
+            OnCustomerLeft?.Invoke(customer);
+        }
+
+        public static void RaiseCustomerSeated(CustomerData customer)
+            => OnCustomerSeated?.Invoke(customer);
+
+        public static void RaiseCustomerLeftTable(CustomerData customer)
+            => OnCustomerLeftTable?.Invoke(customer);
+
         public static void RaiseMetricsUpdated(MetricSnapshot snapshot)
             => OnMetricsUpdated?.Invoke(snapshot);
 
@@ -77,6 +101,9 @@ namespace CafeSim.Events
             OnCustomerStateChanged = null;
             OnCustomerServed = null;
             OnCustomerAbandoned = null;
+            OnCustomerRejected = null;
+            OnCustomerSeated = null;
+            OnCustomerLeftTable = null;
             OnCustomerLeft = null;
             OnMetricsUpdated = null;
             OnSimulationReset = null;

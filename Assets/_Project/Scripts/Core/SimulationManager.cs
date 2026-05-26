@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using CafeSim.Core.Metrics;
 using CafeSim.Core.Queue;
+using CafeSim.Core.Tables;
 using CafeSim.Events;
 
 namespace CafeSim.Core
@@ -10,11 +11,19 @@ namespace CafeSim.Core
     /// Orquestador único de la simulación. Singleton no-MonoBehaviour para
     /// mantener el Core libre de dependencias de Unity.
     ///
-    /// <para>El loop de Unity (a través de un <c>SimulationBootstrap : MonoBehaviour</c>
-    /// que escribirá I3) debe llamar a <see cref="Tick"/> en cada frame con
-    /// <c>Time.deltaTime</c>. Todas las cantidades temporales se manejan en
-    /// segundos. Las tasas de llegada/servicio se reciben en clientes por
-    /// segundo (ver <see cref="SimulationParameters"/>).</para>
+    /// <para>Responsabilidades:
+    /// <list type="bullet">
+    ///   <item>Generación de llegadas (proceso de Poisson vía LCG + Exponencial).</item>
+    ///   <item>Routing físico vs. web (vía <see cref="OrderSystem"/>).</item>
+    ///   <item>Asignación de servidores con o sin modo multi-skill.</item>
+    ///   <item>Asignación de mesas (vía <see cref="TableManager"/>) o consumo de pie.</item>
+    ///   <item>Rechazo al llegar si la cola correspondiente está llena o se supera el límite concurrente.</item>
+    ///   <item>Abandono por impaciencia en cola.</item>
+    ///   <item>Publicación periódica del <see cref="MetricSnapshot"/> vía <see cref="GameEvents"/>.</item>
+    /// </list></para>
+    ///
+    /// El driver de Unity (un <c>SimulationBootstrap : MonoBehaviour</c>) debe
+    /// llamar a <see cref="Tick"/> cada frame con <c>Time.deltaTime</c>.
     /// </summary>
     public sealed class SimulationManager
     {
@@ -30,6 +39,7 @@ namespace CafeSim.Core
         private SimulationParameters _params;
         private LCGRandomGenerator _rng;
         private OrderSystem _orderSystem;
+        private TableManager _tableManager;
 
         private QueueController<CustomerData> _cashierQueue;
         private QueueController<CustomerData> _baristaQueue;
@@ -48,27 +58,26 @@ namespace CafeSim.Core
         private int _arrivedCount;
         private int _servedCount;
         private int _abandonedCount;
+        private int _rejectedCount;
 
         // ─── Propiedades públicas ─────────────────────────────────────────────
 
-        /// <summary>True cuando el simulador está configurado y corriendo.</summary>
         public bool IsRunning { get; private set; }
-
-        /// <summary>Tiempo simulado transcurrido (segundos).</summary>
         public float SimulationTime => _simulationTime;
-
-        /// <summary>Parámetros vigentes; null si nunca se configuró.</summary>
         public SimulationParameters Parameters => _params;
 
         public int ArrivedCount => _arrivedCount;
         public int ServedCount => _servedCount;
         public int AbandonedCount => _abandonedCount;
+        public int RejectedCount => _rejectedCount;
+        public int ActiveCustomerCount => _arrivedCount - _servedCount - _abandonedCount - _rejectedCount;
+
+        public TableManager TableManager => _tableManager;
 
         // ─── API pública ──────────────────────────────────────────────────────
 
         /// <summary>
         /// Configura los parámetros y reinicia toda la corrida desde t = 0.
-        /// Debe llamarse al menos una vez antes del primer <see cref="Tick"/>.
         /// </summary>
         public void Configure(SimulationParameters parameters)
         {
@@ -77,9 +86,8 @@ namespace CafeSim.Core
         }
 
         /// <summary>
-        /// Actualiza los parámetros en caliente (típicamente desde un slider de
-        /// UI) sin resetear el reloj. Solo afecta a los próximos eventos: las
-        /// llegadas ya programadas y los servicios en curso no se reagendan.
+        /// Actualiza los parámetros en caliente sin resetear el reloj. Útil
+        /// para sliders en la UI.
         /// </summary>
         public void UpdateParameters(SimulationParameters parameters)
         {
@@ -88,10 +96,7 @@ namespace CafeSim.Core
             ResizeServers();
         }
 
-        /// <summary>
-        /// Reinicia todo el estado de la simulación a tiempo 0 conservando los
-        /// parámetros vigentes. Limpia clientes, colas y servidores.
-        /// </summary>
+        /// <summary>Reinicia el estado a tiempo 0 conservando los parámetros vigentes.</summary>
         public void Reset()
         {
             if (_params == null)
@@ -102,6 +107,7 @@ namespace CafeSim.Core
             _cashierQueue = new QueueController<CustomerData>(new FifoQueue<CustomerData>());
             _baristaQueue = new QueueController<CustomerData>(new FifoQueue<CustomerData>());
             _orderSystem = new OrderSystem(_cashierQueue, _baristaQueue);
+            _tableManager = new TableManager(_params.TableCount, _params.SeatsPerTable);
 
             _cashiers = CreateServers(_params.CashierCount);
             _baristas = CreateServers(_params.BaristaCount);
@@ -115,6 +121,7 @@ namespace CafeSim.Core
             _arrivedCount = 0;
             _servedCount = 0;
             _abandonedCount = 0;
+            _rejectedCount = 0;
 
             _nextArrivalTime = ExponentialDistribution
                 .SampleWithRate(_rng, _params.ArrivalRatePerSecond);
@@ -123,20 +130,12 @@ namespace CafeSim.Core
             GameEvents.RaiseSimulationReset();
         }
 
-        /// <summary>
-        /// Pausa la simulación. <see cref="Tick"/> no avanza el tiempo mientras esté pausado.
-        /// </summary>
         public void Pause() => IsRunning = false;
-
-        /// <summary>Reanuda la simulación pausada.</summary>
-        public void Resume()
-        {
-            if (_params != null) IsRunning = true;
-        }
+        public void Resume() { if (_params != null) IsRunning = true; }
 
         /// <summary>
-        /// Avanza el reloj de la simulación <paramref name="deltaTimeSeconds"/>
-        /// segundos y procesa todos los eventos que caen dentro de ese intervalo.
+        /// Avanza el reloj de la simulación y procesa todos los eventos que
+        /// caen dentro del intervalo.
         /// </summary>
         public void Tick(float deltaTimeSeconds)
         {
@@ -145,8 +144,8 @@ namespace CafeSim.Core
             _simulationTime += deltaTimeSeconds;
 
             ProcessArrivals();
-            ProcessServerCompletions(_cashiers, isCashier: true);
-            ProcessServerCompletions(_baristas, isCashier: false);
+            ProcessServerCompletions(_cashiers);
+            ProcessServerCompletions(_baristas);
             ProcessConsumeCompletions();
             ProcessAbandonments();
             TryAssignServers();
@@ -157,12 +156,9 @@ namespace CafeSim.Core
             EmitMetricsIfDue();
         }
 
-        /// <summary>
-        /// Devuelve la foto actual de métricas sin esperar al próximo emit programado.
-        /// </summary>
         public MetricSnapshot GetCurrentSnapshot() => BuildSnapshot();
 
-        // ─── Procesamiento interno por fase ───────────────────────────────────
+        // ─── Procesamiento: Llegadas ──────────────────────────────────────────
 
         private void ProcessArrivals()
         {
@@ -177,15 +173,46 @@ namespace CafeSim.Core
         private void SpawnCustomerAt(float arrivalTime)
         {
             bool isWebOrder = _rng.NextBool(_params.WebOrderProbability);
-            var customer = new CustomerData(_nextCustomerId++, isWebOrder, arrivalTime);
+            var product = ProductCatalog.SampleProduct(_rng);
+            var customer = new CustomerData(_nextCustomerId++, isWebOrder, arrivalTime)
+            {
+                Product = product
+            };
             _arrivedCount++;
-
             GameEvents.RaiseCustomerArrived(customer);
+
+            if (ShouldReject(customer))
+            {
+                RejectCustomer(customer);
+                return;
+            }
+
             _orderSystem.RouteOnArrival(customer, arrivalTime);
             GameEvents.RaiseCustomerStateChanged(customer);
         }
 
-        private void ProcessServerCompletions(Server[] servers, bool isCashier)
+        private bool ShouldReject(CustomerData customer)
+        {
+            if (ActiveCustomerCount > _params.MaxConcurrentCustomers) return true;
+
+            if (customer.IsWebOrder)
+                return _baristaQueue.Length >= _params.MaxBaristaQueueLength;
+            return _cashierQueue.Length >= _params.MaxCashierQueueLength;
+        }
+
+        private void RejectCustomer(CustomerData customer)
+        {
+            customer.State = CustomerState.Rejected;
+            customer.WasRejected = true;
+            customer.DepartureTime = _simulationTime;
+            _rejectedCount++;
+            _finishedCustomers.Add(customer);
+            GameEvents.RaiseCustomerRejected(customer);
+        }
+
+        // ─── Procesamiento: Servidores ────────────────────────────────────────
+
+        private void ProcessServerCompletions(Server[] servers)
         {
             for (int i = 0; i < servers.Length; i++)
             {
@@ -193,10 +220,12 @@ namespace CafeSim.Core
                 if (!server.IsBusy || server.ServiceEndTime > _simulationTime) continue;
 
                 var customer = server.CurrentCustomer;
+                var finishedTask = server.CurrentTask;
                 server.TotalBusyTime += server.ServiceEndTime - server.ServiceStartTime;
                 server.CurrentCustomer = null;
+                server.CurrentTask = ServerTask.Idle;
 
-                if (isCashier)
+                if (finishedTask == ServerTask.TakingOrder)
                 {
                     customer.CashierServiceEndTime = server.ServiceEndTime;
                     _orderSystem.RouteAfterCashier(customer, server.ServiceEndTime);
@@ -212,13 +241,28 @@ namespace CafeSim.Core
 
         private void StartConsuming(CustomerData customer, float startTime)
         {
-            customer.State = CustomerState.Consuming;
+            bool seated = _tableManager.TryAssignSeat(customer.Id, out int tableId, out int seatIndex);
+            if (seated)
+            {
+                customer.TableId = tableId;
+                customer.SeatIndex = seatIndex;
+                customer.State = CustomerState.Consuming;
+                GameEvents.RaiseCustomerSeated(customer);
+            }
+            else
+            {
+                customer.ConsumedStanding = true;
+                customer.State = CustomerState.ConsumingStanding;
+            }
+
             customer.ConsumeStartTime = startTime;
             customer.ConsumeEndTime = startTime
                 + ExponentialDistribution.SampleWithMean(_rng, _params.AverageConsumeTimeSeconds);
             _consumingCustomers.Add(customer);
             GameEvents.RaiseCustomerStateChanged(customer);
         }
+
+        // ─── Procesamiento: Consumo ───────────────────────────────────────────
 
         private void ProcessConsumeCompletions()
         {
@@ -228,6 +272,12 @@ namespace CafeSim.Core
                 if (!customer.ConsumeEndTime.HasValue
                     || customer.ConsumeEndTime.Value > _simulationTime) continue;
 
+                if (customer.TableId > 0)
+                {
+                    _tableManager.ReleaseSeat(customer.Id, customer.TableId);
+                    GameEvents.RaiseCustomerLeftTable(customer);
+                }
+
                 customer.State = CustomerState.Leaving;
                 customer.DepartureTime = customer.ConsumeEndTime.Value;
                 _consumingCustomers.RemoveAt(i);
@@ -236,6 +286,8 @@ namespace CafeSim.Core
                 GameEvents.RaiseCustomerServed(customer);
             }
         }
+
+        // ─── Procesamiento: Abandono ──────────────────────────────────────────
 
         private void ProcessAbandonments()
         {
@@ -265,19 +317,26 @@ namespace CafeSim.Core
             }
         }
 
+        // ─── Procesamiento: Asignación de servidores ──────────────────────────
+
         private void TryAssignServers()
         {
-            AssignFromQueue(_cashierQueue, _cashiers,
-                _params.ServiceRateCashierPerSecond, isCashier: true);
-            AssignFromQueue(_baristaQueue, _baristas,
-                _params.ServiceRateBaristaPerSecond, isCashier: false);
+            // Fase 1: cada pool atiende su cola "nativa".
+            AssignFreeServers(_cashiers, _cashierQueue, ServerTask.TakingOrder);
+            AssignFreeServers(_baristas, _baristaQueue, ServerTask.PreparingDrink);
+
+            // Fase 2 (solo multi-skill): los workers libres pueden cubrir la otra cola.
+            if (_params.CashierAlsoBarista)
+            {
+                AssignFreeServers(_cashiers, _baristaQueue, ServerTask.PreparingDrink);
+                AssignFreeServers(_baristas, _cashierQueue, ServerTask.TakingOrder);
+            }
         }
 
-        private void AssignFromQueue(
-            QueueController<CustomerData> queue,
+        private void AssignFreeServers(
             Server[] servers,
-            float serviceRate,
-            bool isCashier)
+            QueueController<CustomerData> queue,
+            ServerTask task)
         {
             for (int i = 0; i < servers.Length; i++)
             {
@@ -286,11 +345,11 @@ namespace CafeSim.Core
                 if (!queue.TryDequeue(_simulationTime, out var customer)) return;
 
                 server.CurrentCustomer = customer;
+                server.CurrentTask = task;
                 server.ServiceStartTime = _simulationTime;
-                server.ServiceEndTime = _simulationTime
-                    + ExponentialDistribution.SampleWithRate(_rng, serviceRate);
+                server.ServiceEndTime = _simulationTime + ComputeServiceTime(task, customer);
 
-                if (isCashier)
+                if (task == ServerTask.TakingOrder)
                 {
                     customer.State = CustomerState.Ordering;
                     customer.CashierServiceStartTime = _simulationTime;
@@ -302,6 +361,15 @@ namespace CafeSim.Core
                 }
                 GameEvents.RaiseCustomerStateChanged(customer);
             }
+        }
+
+        private float ComputeServiceTime(ServerTask task, CustomerData customer)
+        {
+            if (task == ServerTask.TakingOrder)
+                return ExponentialDistribution.SampleWithRate(_rng, _params.ServiceRateCashierPerSecond);
+
+            float mean = ProductCatalog.GetMeanServiceTimeSeconds(customer.Product);
+            return ExponentialDistribution.SampleWithMean(_rng, mean);
         }
 
         // ─── Métricas ─────────────────────────────────────────────────────────
@@ -371,12 +439,20 @@ namespace CafeSim.Core
             return resized;
         }
 
-        // ─── Tipo auxiliar ────────────────────────────────────────────────────
+        // ─── Tipos auxiliares ─────────────────────────────────────────────────
+
+        private enum ServerTask
+        {
+            Idle,
+            TakingOrder,    // está atendiendo en la caja
+            PreparingDrink  // está preparando una bebida
+        }
 
         private sealed class Server
         {
             public int Id;
             public CustomerData CurrentCustomer;
+            public ServerTask CurrentTask;
             public float ServiceStartTime;
             public float ServiceEndTime;
             public float TotalBusyTime;
