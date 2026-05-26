@@ -18,39 +18,39 @@ namespace CafeSim.Data
         // ─── Tasas ─────────────────────────────────────────────────────────────
 
         [Header("Tasas (clientes por minuto)")]
-        [Tooltip("Tasa de llegadas λ. Clientes nuevos por minuto.")]
+        [Tooltip("Tasa de llegadas λ. Un cliente cada 15 s por defecto (4/min).")]
         [Range(0.1f, 60f)]
-        [SerializeField] private float arrivalRatePerMinute = 20f;
+        [SerializeField] private float arrivalRatePerMinute = 4f;
 
-        [Tooltip("Tasa de servicio por cajero μ_caja. Órdenes tomadas por minuto.")]
+        [Tooltip("Tasa de servicio por cajero μ_caja. ~5 s por orden (12/min).")]
         [Range(0.1f, 60f)]
-        [SerializeField] private float serviceRateCashierPerMinute = 8f;
+        [SerializeField] private float serviceRateCashierPerMinute = 12f;
 
-        [Tooltip("Tasa fallback del barista (si el producto no asignó tiempo). Bebidas/min.")]
+        [Tooltip("Tasa fallback del barista cuando el producto no fija tiempo. El tiempo real lo determina ProductCatalog.")]
         [Range(0.1f, 60f)]
-        [SerializeField] private float serviceRateBaristaPerMinute = 4f;
+        [SerializeField] private float serviceRateBaristaPerMinute = 3f;
 
         // ─── Tiempos ──────────────────────────────────────────────────────────
 
         [Header("Tiempos (segundos)")]
-        [Tooltip("Tiempo promedio que un cliente permanece consumiendo en mesa o de pie.")]
+        [Tooltip("Tiempo promedio que un cliente permanece consumiendo en mesa o de pie. 5 min por defecto.")]
         [Range(30f, 1800f)]
-        [SerializeField] private float averageConsumeTimeSeconds = 180f;
+        [SerializeField] private float averageConsumeTimeSeconds = 300f;
 
-        [Tooltip("Paciencia máxima en cola antes de abandonar.")]
+        [Tooltip("Paciencia máxima en cola antes de abandonar. 90 s por defecto.")]
         [Range(10f, 600f)]
-        [SerializeField] private float customerPatienceSeconds = 120f;
+        [SerializeField] private float customerPatienceSeconds = 90f;
 
         // ─── Servidores ───────────────────────────────────────────────────────
 
         [Header("Servidores")]
-        [Tooltip("Cantidad de cajeros activos.")]
+        [Tooltip("Cantidad de cajeros activos. 1 alcanza con λ moderada.")]
         [Range(1, 5)]
         [SerializeField] private int cashierCount = 1;
 
-        [Tooltip("Cantidad de baristas activos.")]
+        [Tooltip("Cantidad de baristas activos. 2 mantiene ρ ≈ 0.7 con la mezcla de productos por defecto.")]
         [Range(1, 5)]
-        [SerializeField] private int baristaCount = 1;
+        [SerializeField] private int baristaCount = 2;
 
         [Tooltip("Si está activo, todos los servidores son multi-skill (cajeros y baristas a la vez).")]
         [SerializeField] private bool cashierAlsoBarista = false;
@@ -60,7 +60,7 @@ namespace CafeSim.Data
         [Header("Mesas")]
         [Tooltip("Cantidad de mesas en el local.")]
         [Range(0, 20)]
-        [SerializeField] private int tableCount = 8;
+        [SerializeField] private int tableCount = 6;
 
         [Tooltip("Sillas por mesa.")]
         [Range(1, 6)]
@@ -69,9 +69,9 @@ namespace CafeSim.Data
         // ─── Pedidos web ──────────────────────────────────────────────────────
 
         [Header("Pedidos web")]
-        [Tooltip("Probabilidad de que un cliente nuevo realice pedido web. 0 = todos físicos.")]
+        [Tooltip("Probabilidad [0..1] de pedido web. El asset SimulationConfig_Fisico usa 0; SimulationConfig_Hibrido usa 0.4.")]
         [Range(0f, 1f)]
-        [SerializeField] private float webOrderProbability = 0.3f;
+        [SerializeField] private float webOrderProbability = 0f;
 
         // ─── Límites de capacidad (protección de rendimiento) ─────────────────
 
@@ -86,7 +86,7 @@ namespace CafeSim.Data
 
         [Tooltip("Máximo absoluto de clientes simultáneos. Protege Unity de saturarse.")]
         [Range(10, 200)]
-        [SerializeField] private int maxConcurrentCustomers = 50;
+        [SerializeField] private int maxConcurrentCustomers = 40;
 
         // ─── Reproducibilidad ─────────────────────────────────────────────────
 
@@ -147,6 +147,7 @@ namespace CafeSim.Data
         public void SetArrivalRatePerMinute(float value)   => arrivalRatePerMinute = Mathf.Max(0.1f, value);
         public void SetServiceRateCashier(float value)     => serviceRateCashierPerMinute = Mathf.Max(0.1f, value);
         public void SetServiceRateBarista(float value)     => serviceRateBaristaPerMinute = Mathf.Max(0.1f, value);
+        public void SetAverageConsumeTime(float seconds)   => averageConsumeTimeSeconds = Mathf.Max(1f, seconds);
         public void SetCustomerPatience(float seconds)     => customerPatienceSeconds = Mathf.Max(1f, seconds);
         public void SetWebOrderProbability(float value)    => webOrderProbability = Mathf.Clamp01(value);
         public void SetCashierCount(int value)             => cashierCount = Mathf.Max(1, value);

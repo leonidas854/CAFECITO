@@ -35,9 +35,10 @@ namespace CafeSim.Entities
         {
             TableId = tableId;
             seatCount = seats;
+            gameObject.name = $"Table_{tableId}";
             transform.localScale = new Vector3(size.x, size.y, 1f);
             var renderer = GetComponent<SpriteRenderer>();
-            renderer.sprite = PlaceholderShapes.Square;
+            renderer.sprite = PlaceholderShapes.RoundedRect;
             renderer.color = TableColor;
             renderer.sortingOrder = 0;
             CreateSeats();
@@ -71,10 +72,11 @@ namespace CafeSim.Entities
             for (int i = 0; i < seatCount; i++)
             {
                 Vector2 offset = ComputeSeatOffset(i, seatCount);
-                var seat = PlaceholderShapes.CreateColoredSquare(
-                    objectName: $"Seat_{i + 1}",
+                var seat = PlaceholderShapes.CreateColoredShape(
+                    objectName: $"Seat_T{TableId}_{i + 1}",
+                    sprite: PlaceholderShapes.Circle,
                     color: FreeSeatColor,
-                    size: new Vector2(0.4f, 0.4f),
+                    size: new Vector2(0.35f, 0.35f),
                     parent: transform,
                     sortingOrder: 1);
                 seat.transform.localPosition = new Vector3(offset.x, offset.y, 0f);

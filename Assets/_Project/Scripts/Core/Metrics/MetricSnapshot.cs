@@ -21,6 +21,9 @@ namespace CafeSim.Core.Metrics
         /// <summary>Clientes que abandonaron por superar su paciencia.</summary>
         public int AbandonedCount { get; }
 
+        /// <summary>Clientes rechazados al llegar por límites de capacidad.</summary>
+        public int RejectedCount { get; }
+
         /// <summary>Longitud actual de la cola del cajero.</summary>
         public int CashierQueueLength { get; }
 
@@ -60,6 +63,7 @@ namespace CafeSim.Core.Metrics
             int arrivedCount,
             int servedCount,
             int abandonedCount,
+            int rejectedCount,
             int cashierQueueLength,
             int baristaQueueLength,
             float cashierAverageQueueLength,
@@ -73,6 +77,7 @@ namespace CafeSim.Core.Metrics
             ArrivedCount = arrivedCount;
             ServedCount = servedCount;
             AbandonedCount = abandonedCount;
+            RejectedCount = rejectedCount;
             CashierQueueLength = cashierQueueLength;
             BaristaQueueLength = baristaQueueLength;
             CashierAverageQueueLength = cashierAverageQueueLength;

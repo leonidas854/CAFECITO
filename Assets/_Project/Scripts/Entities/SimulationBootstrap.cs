@@ -5,6 +5,7 @@ using CafeSim.Data;
 using CafeSim.Entities.Layout;
 using CafeSim.Entities.Placeholders;
 using CafeSim.Events;
+using CafeSim.UI;
 
 namespace CafeSim.Entities
 {
@@ -45,7 +46,12 @@ namespace CafeSim.Entities
         [Range(3f, 30f)]
         [SerializeField] private float cameraOrthographicSize = 8f;
 
+        [Header("Dashboard UI")]
+        [Tooltip("Crea el dashboard de métricas, sliders y controles en runtime.")]
+        [SerializeField] private bool buildDashboard = true;
+
         private Transform _entitiesRoot;
+        private DashboardUI _dashboard;
         private readonly List<TableEntity> _tableEntities = new List<TableEntity>();
 
         // ─── Ciclo de vida ───────────────────────────────────────────────────
@@ -58,6 +64,7 @@ namespace CafeSim.Entities
             BuildSceneRoot();
             BuildLocalFurniture();
             if (autoFitCamera) FitCamera();
+            if (buildDashboard) BuildDashboard();
         }
 
         private void Start()
@@ -177,10 +184,11 @@ namespace CafeSim.Entities
 
         private void CreateServer(string objectName, Vector2 position, ServerRole role)
         {
-            var go = PlaceholderShapes.CreateColoredSquare(
+            var go = PlaceholderShapes.CreateColoredShape(
                 objectName: objectName,
+                sprite: PlaceholderShapes.RoundedRect,
                 color: Color.white,
-                size: new Vector2(0.7f, 1.2f),
+                size: new Vector2(0.8f, 0.8f),
                 parent: _entitiesRoot,
                 sortingOrder: 2);
             go.transform.position = new Vector3(position.x, position.y, 0f);
@@ -190,13 +198,30 @@ namespace CafeSim.Entities
 
         private void CreateMarker(string objectName, Vector2 position, Vector2 size, Color color)
         {
-            var go = PlaceholderShapes.CreateColoredSquare(
+            var go = PlaceholderShapes.CreateColoredShape(
                 objectName: objectName,
+                sprite: PlaceholderShapes.RoundedRect,
                 color: color,
                 size: size,
                 parent: _entitiesRoot,
                 sortingOrder: -1);
             go.transform.position = new Vector3(position.x, position.y, 0f);
+        }
+
+        // ─── Dashboard ───────────────────────────────────────────────────────
+
+        private void BuildDashboard()
+        {
+            var existing = FindFirstObjectByType<DashboardUI>();
+            if (existing != null)
+            {
+                _dashboard = existing;
+                return;
+            }
+            var go = new GameObject("Dashboard");
+            go.transform.SetParent(transform, worldPositionStays: false);
+            _dashboard = go.AddComponent<DashboardUI>();
+            _dashboard.Build(config);
         }
 
         // ─── Cámara ──────────────────────────────────────────────────────────

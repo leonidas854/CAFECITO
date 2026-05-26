@@ -389,6 +389,7 @@ namespace CafeSim.Core
                 arrivedCount: _arrivedCount,
                 servedCount: _servedCount,
                 abandonedCount: _abandonedCount,
+                rejectedCount: _rejectedCount,
                 cashierQueueLength: _cashierQueue.Length,
                 baristaQueueLength: _baristaQueue.Length,
                 cashierAverageQueueLength: _cashierQueue.AverageLength(_simulationTime),

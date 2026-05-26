@@ -17,7 +17,10 @@ namespace CafeSim.Entities
     /// </summary>
     public sealed class CustomerSpawner : MonoBehaviour
     {
-        [SerializeField] private Vector2 customerSize = new Vector2(0.5f, 1f);
+        [Tooltip("Tamaño del placeholder del cliente. Se usa un círculo (vista cenital).")]
+        [SerializeField] private Vector2 customerSize = new Vector2(0.6f, 0.6f);
+
+        [Tooltip("Velocidad del cliente caminando, en unidades por segundo.")]
         [SerializeField] private float walkSpeed = 3f;
 
         private SceneLayout _layout;
@@ -101,8 +104,13 @@ namespace CafeSim.Entities
 
         private CustomerEntity CreateCustomerVisual(CustomerData data)
         {
-            var go = PlaceholderShapes.CreateColoredSquare(
-                objectName: $"Customer_{data.Id}",
+            string visualName = data.IsWebOrder
+                ? $"Customer_{data.Id}_Web"
+                : $"Customer_{data.Id}_Walk-in";
+
+            var go = PlaceholderShapes.CreateColoredShape(
+                objectName: visualName,
+                sprite: PlaceholderShapes.Circle,
                 color: CustomerVisualController.ColorFor(data.State),
                 size: customerSize,
                 parent: _customerParent,
